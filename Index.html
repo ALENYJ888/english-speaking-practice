@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>線上英語口說發音練習系統</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <style>
+    @keyframes pulse-ring {
+      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+      70% { transform: scale(1); box-shadow: 0 0 0 15px rgba(239, 68, 68, 0); }
+      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+    }
+    .recording-pulse { animation: pulse-ring 1.5s infinite; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
+
+  <!-- 頂部導覽列 -->
+  <header class="bg-blue-700 text-white shadow-md">
+    <div class="max-w-4xl mx-auto px-4 py-4 flex justify-between items-center">
+      <div class="flex items-center gap-2">
+        <i class="fa-solid fa-microphone-lines text-2xl"></i>
+        <h1 class="text-xl font-bold tracking-wide">AI 英語口說發音練習室</h1>
+      </div>
+      <div id="userInfo" class="hidden items-center gap-3 text-sm">
+        <span id="studentDisplay" class="bg-blue-800 px-3 py-1 rounded-full"></span>
+        <button onclick="logout()" class="text-blue-200 hover:text-white underline">登出</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- 主內容區 -->
+  <main class="flex-grow max-w-4xl w-full mx-auto px-4 py-8">
+    
+    <!-- 載入中畫面 -->
+    <div id="loadingView" class="text-center py-20">
+      <i class="fa-solid fa-circle-notch fa-spin text-4xl text-blue-600 mb-4"></i>
+      <p class="text-slate-600 font-medium">正在同步雲端題庫與學生資料...</p>
+    </div>
+
+    <!-- 登入畫面 -->
+    <div id="loginView" class="hidden max-w-md mx-auto bg-white rounded-2xl shadow-lg p-8 border border-slate-100">
+      <h2 class="text-2xl font-bold text-center text-slate-800 mb-2">學生登入</h2>
+      <p class="text-center text-slate-500 text-sm mb-6">請輸入學號與 4 位數驗證碼開始練習</p>
+      
+      <div class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">學號 (例如：S101)</label>
+          <input type="text" id="loginId" placeholder="請輸入學號" class="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none uppercase" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">驗證碼 PIN (例如：1234)</label>
+          <input type="password" id="loginPin" placeholder="請輸入驗證碼" class="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+        </div>
+        <p id="loginError" class="text-red-500 text-sm hidden"></p>
+        <button onclick="handleLogin()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition shadow">
+          進入練習
+        </button>
+      </div>
+    </div>
+
+    <!-- 練習主畫面 -->
+    <div id="practiceView" class="hidden space-y-6">
+      
+      <!-- 單元與題號選擇列 -->
+      <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-wrap gap-4 justify-between items-center">
+        <div class="flex items-center gap-2">
+          <label class="text-sm font-semibold text-slate-600">選擇單元：</label>
+          <select id="unitSelect" onchange="filterByUnit()" class="border border-slate-300 rounded-lg px-3 py-1.5 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500"></select>
+        </div>
+        <div class="text-sm font-medium text-slate-600">
+          題目進度：<span id="questionCounter" class="text-blue-600 font-bold">1 / 1</span>
+        </div>
+      </div>
+
+      <!-- 題目卡片 -->
+      <div class="bg-white rounded-2xl shadow-md border border-slate-200 p-6 md:p-10 text-center space-y-6">
+        <span id="questionUnitTag" class="inline-block bg-blue-100 text-blue-800 text-xs font-semibold px-3 py-1 rounded-full"></span>
+        
+        <!-- 英文句子顯示區（會動態替換成紅綠燈比對結果） -->
+        <div id="sentenceDisplay" class="text-2xl md:text-3xl font-bold text-slate-800 leading-relaxed py-2"></div>
+        
+        <!-- 中文翻譯 -->
+        <p id="translationDisplay" class="text-slate-500 text-lg"></p>
+
+        <!-- 示範發音按鈕區 -->
+        <div class="flex justify-center gap-3 pt-2">
+          <button onclick="speakSentence(1.0)" class="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-full text-sm font-medium transition">
+            <i class="fa-solid fa-volume-high text-blue-600"></i> 標準示範發音
+          </button>
+          <button onclick="speakSentence(0.7)" class="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-full text-sm font-medium transition">
+            <i class="fa-solid fa-turtle text-emerald-600"></i> 慢速清晰朗讀
+          </button>
+        </div>
+
+        <hr class="border-slate-100" />
+
+        <!-- 錄音控制按鈕 -->
+        <div class="py-2">
+          <button id="recordBtn" onclick="toggleRecording()" class="w-20 h-20 rounded-full bg-blue-600 hover:bg-blue-700 text-white text-2xl shadow-lg transition flex items-center justify-center mx-auto">
+            <i id="recordIcon" class="fa-solid fa-microphone"></i>
+          </button>
+          <p id="recordStatus" class="text-sm text-slate-500 mt-3 font-medium">點擊麥克風開始朗讀句子</p>
+        </div>
+
+        <!-- 辨識結果與糾錯回饋區 -->
+        <div id="feedbackBox" class="hidden bg-slate-50 rounded-xl p-5 border border-slate-200 text-left space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold uppercase tracking-wider text-slate-400">系統聽到的內容</span>
+            <span id="resultBadge" class="text-xs font-bold px-2.5 py-1 rounded-full"></span>
+          </div>
+          <p id="spokenTextDisplay" class="text-slate-700 italic text-base"></p>
+          
+          <!-- 錯字個別教學提示 -->
+          <div id="correctionTip" class="hidden pt-2 border-t border-slate-200">
+            <p class="text-sm font-semibold text-red-600 mb-2">
+              <i class="fa-solid fa-circle-exclamation mr-1"></i> 系統偵測到以下單字發音不完整或遺漏（點擊單字可單獨聽正確念法）：
+            </p>
+            <div id="wrongWordsContainer" class="flex flex-wrap gap-2"></div>
+          </div>
+        </div>
+
+        <!-- 上一題 / 下一題切換 -->
+        <div class="flex justify-between pt-4">
+          <button onclick="prevQuestion()" class="px-5 py-2 rounded-lg border border-slate-300 text-slate-600 hover:bg-slate-100 text-sm font-medium">
+            <i class="fa-solid fa-arrow-left mr-1"></i> 上一題
+          </button>
+          <button onclick="nextQuestion()" class="px-5 py-2 rounded-lg bg-slate-800 hover:bg-slate-900 text-white text-sm font-medium">
+            下一題 <i class="fa-solid fa-arrow-right ml-1"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <script>
+    // ==========================================
+    // 請將下方引號內的網址替換為你的 Google Apps Script 網址
+    // ==========================================
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbydWSnU19zX6TU0XzfpHY5cKwD-MZupsY82sTiBTKINSx4LYQZZyt5WVPtrmp13P7MU/exec";
+
+    let allQuestions = [];
+    let filteredQuestions = [];
+    let allStudents = [];
+    let currentUser = null;
+    let currentIndex = 0;
+    let isRecording = false;
+    let recognition = null;
+
+    // 初始化語音辨識 (Web Speech API)
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      recognition = new SpeechRecognition();
+      recognition.lang = 'en-US';
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+
+      recognition.onstart = () => {
+        isRecording = true;
+        document.getElementById('recordBtn').classList.add('bg-red-600', 'recording-pulse');
+        document.getElementById('recordBtn').classList.remove('bg-blue-600');
+        document.getElementById('recordIcon').className = 'fa-solid fa-stop';
+        document.getElementById('recordStatus').innerText = '正在聆聽中，請朗讀英文句子...';
+      };
+
+      recognition.onend = () => {
+        isRecording = false;
+        document.getElementById('recordBtn').classList.remove('bg-red-600', 'recording-pulse');
+        document.getElementById('recordBtn').classList.add('bg-blue-600');
+        document.getElementById('recordIcon').className = 'fa-solid fa-microphone';
+        document.getElementById('recordStatus').innerText = '點擊麥克風可重新練習';
+      };
+
+      recognition.onresult = (event) => {
+        const spoken = event.results[0][0].transcript;
+        evaluatePronunciation(spoken);
+      };
+
+      recognition.onerror = (event) => {
+        alert('麥克風辨識發生錯誤：' + event.error + '\n請確認已允許瀏覽器使用麥克風，並使用 Chrome 或 Safari 開啟。');
+      };
+    } else {
+      alert('您的瀏覽器不支援語音辨識功能，建議使用 Google Chrome 或 Safari 開啟。');
+    }
+
+    // 頁面載入時向 Google Sheet 抓取資料
+    window.onload = async () => {
+      try {
+        const res = await fetch(`${GAS_API_URL}?action=init`);
+        const data = await res.json();
+        if (data.status === 'success') {
+          allQuestions = data.questions;
+          allStudents = data.students;
+          document.getElementById('loadingView').classList.add('hidden');
+          document.getElementById('loginView').classList.remove('hidden');
+        }
+      } catch (err) {
+        document.getElementById('loadingView').innerHTML = `
+          <p class="text-red-600 font-bold">無法連線至試算表 API</p>
+          <p class="text-sm text-slate-500 mt-2">請確認 index.html 中的 GAS_API_URL 是否已正確填入，且 Apps Script 已部署為「所有人可存取」。</p>
+        `;
+      }
+    };
+
+    // 學生登入驗證
+    function handleLogin() {
+      const idInput = document.getElementById('loginId').value.trim().toUpperCase();
+      const pinInput = document.getElementById('loginPin').value.trim();
+      const errorEl = document.getElementById('loginError');
+
+      const matched = allStudents.find(s => s.student_id.toUpperCase() === idInput && s.pin === pinInput);
+      if (matched) {
+        currentUser = matched;
+        errorEl.classList.add('hidden');
+        document.getElementById('loginView').classList.add('hidden');
+        document.getElementById('practiceView').classList.remove('hidden');
+        
+        const userInfo = document.getElementById('userInfo');
+        userInfo.classList.remove('hidden');
+        userInfo.classList.add('flex');
+        document.getElementById('studentDisplay').innerText = `${matched.class} | ${matched.name} (${matched.student_id})`;
+        
+        initUnits();
+      } else {
+        errorEl.innerText = '學號或驗證碼錯誤，請重新輸入！';
+        errorEl.classList.remove('hidden');
+      }
+    }
+
+    function logout() {
+      currentUser = null;
+      document.getElementById('practiceView').classList.add('hidden');
+      document.getElementById('userInfo').classList.add('hidden');
+      document.getElementById('loginView').classList.remove('hidden');
+    }
+
+    // 初始化單元下拉選單
+    function initUnits() {
+      const units = ['全部單元', ...new Set(allQuestions.map(q => q.unit))];
+      const select = document.getElementById('unitSelect');
+      select.innerHTML = units.map(u => `<option value="${u}">${u}</option>`).join('');
+      filterByUnit();
+    }
+
+    function filterByUnit() {
+      const selectedUnit = document.getElementById('unitSelect').value;
+      filteredQuestions = selectedUnit === '全部單元' 
+        ? allQuestions 
+        : allQuestions.filter(q => q.unit === selectedUnit);
+      currentIndex = 0;
+      renderQuestion();
+    }
+
+    // 渲染目前題目
+    function renderQuestion() {
+      const q = filteredQuestions[currentIndex];
+      if (!q) return;
+
+      document.getElementById('questionUnitTag').innerText = q.unit;
+      document.getElementById('sentenceDisplay').innerText = q.sentence;
+      document.getElementById('translationDisplay').innerText = q.translation;
+      document.getElementById('questionCounter').innerText = `${currentIndex + 1} / ${filteredQuestions.length}`;
+      document.getElementById('feedbackBox').classList.add('hidden');
+    }
+
+    function prevQuestion() {
+      if (currentIndex > 0) {
+        currentIndex--;
+        renderQuestion();
+      }
+    }
+
+    function nextQuestion() {
+      if (currentIndex < filteredQuestions.length - 1) {
+        currentIndex++;
+        renderQuestion();
+      } else {
+        alert('已經是本單元的最後一題囉！');
+      }
+    }
+
+    // 語音合成朗讀 (TTS)
+    function speakText(text, rate = 1.0) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'en-US';
+      utterance.rate = rate;
+      window.speechSynthesis.speak(utterance);
+    }
+
+    function speakSentence(rate) {
+      const q = filteredQuestions[currentIndex];
+      speakText(q.sentence, rate);
+    }
+
+    // 控制麥克風開關
+    function toggleRecording() {
+      if (!recognition) return;
+      if (isRecording) {
+        recognition.stop();
+      } else {
+        recognition.start();
+      }
+    }
+
+    // 核心比對邏輯與寫入 Google Sheet
+    function evaluatePronunciation(spokenText) {
+      const q = filteredQuestions[currentIndex];
+      const cleanStr = (str) => str.toLowerCase().replace(/[.,!?;:'"()-]/g, '').trim();
+      
+      const targetWordsOriginal = q.sentence.split(/\s+/);
+      const spokenWordsSet = new Set(cleanStr(spokenText).split(/\s+/));
+      
+      let wrongWords = [];
+      let highlightedHtml = [];
+
+      targetWordsOriginal.forEach(word => {
+        const cleanedWord = cleanStr(word);
+        if (spokenWordsSet.has(cleanedWord)) {
+          highlightedHtml.push(`<span class="text-emerald-600">${word}</span>`);
+        } else {
+          wrongWords.push(cleanedWord);
+          highlightedHtml.push(`<span class="text-red-600 underline decoration-wavy cursor-pointer" title="點擊聽正確發音" onclick="speakText('${cleanedWord}', 0.8)">${word}</span>`);
+        }
+      });
+
+      const isPassed = wrongWords.length === 0;
+
+      // 更新句子紅綠燈標示
+      document.getElementById('sentenceDisplay').innerHTML = highlightedHtml.join(' ');
+      document.getElementById('feedbackBox').classList.remove('hidden');
+      document.getElementById('spokenTextDisplay').innerText = `"${spokenText}"`;
+
+      const badge = document.getElementById('resultBadge');
+      const tipBox = document.getElementById('correctionTip');
+
+      if (isPassed) {
+        badge.innerText = '完全正確！太棒了';
+        badge.className = 'text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700';
+        tipBox.classList.add('hidden');
+      } else {
+        badge.innerText = `有 ${wrongWords.length} 個單字需加強`;
+        badge.className = 'text-xs font-bold px-2.5 py-1 rounded-full bg-red-100 text-red-700';
+        tipBox.classList.remove('hidden');
+        
+        // 產生錯字個別發音按鈕，並自動示範第一個錯字
+        const container = document.getElementById('wrongWordsContainer');
+        container.innerHTML = wrongWords.map(w => `
+          <button onclick="speakText('${w}', 0.75)" class="bg-white border border-red-300 hover:bg-red-50 text-red-700 px-3 py-1.5 rounded-lg text-sm font-semibold shadow-sm flex items-center gap-1.5">
+            <i class="fa-solid fa-volume-high text-xs"></i> ${w}
+          </button>
+        `).join('');
+
+        // 自動先慢速唸出第一個錯字給學生聽
+        speakText(wrongWords[0], 0.75);
+      }
+
+      // 背景非同步將練習結果寫入 Google Sheet 的 Records 分頁
+      saveRecordToSheet({
+        student_id: currentUser.student_id,
+        question_id: q.id,
+        spoken_text: spokenText,
+        wrong_words: wrongWords.join(', '),
+        is_passed: isPassed
+      });
+    }
+
+    async function saveRecordToSheet(payload) {
+      try {
+        await fetch(GAS_API_URL, {
+          method: 'POST',
+          mode: 'no-cors', // 避免 Apps Script 跨域預檢阻擋
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+      } catch (e) {
+        console.error('紀錄寫入失敗:', e);
+      }
+    }
+  </script>
+</body>
+</html>
